@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -5,19 +6,27 @@ using DotFeather;
 
 namespace Action
 {
-	public class SceneLoader
+	/// <summary>
+	/// シーンを読み込みます。
+	/// </summary>
+	public class Map
 	{
+		/// <summary>
+		/// BGM のパスを取得します。
+		/// </summary>
+		/// <value></value>
 		public string BgmPath { get; set; }
 		public LevelMode Mode { get; set; }
 		public int GoalPositionX { get; set; }
 		public Vector StartPosition { get; set; }
+		public Chip[,] Data { get; set; }
 
-		public SceneLoader(string path)
+		public Map(string path)
 		{
 			Parse(File.ReadAllLines(path));
 		}
 		
-		public SceneLoader(string[] lines)
+		public Map(string[] lines)
 		{
 			Parse(lines);
 		}
@@ -33,21 +42,25 @@ namespace Action
 			// デバッグ用に行番号を記録する
 			int number = 0;
 
-			foreach (var line in lines.Select(l => l.Trim()))
+			foreach (var line in lines)
 			{
+				var trimmedLine = line.Trim();
 				// コメントの読み飛ばし
-				if (line.StartsWith("#"))
+				if (trimmedLine.StartsWith("#"))
 					continue;
 
 				if (isMapMode)
 				{
-					if (line.ToLowerInvariant().StartsWith("mapend:"))
+					if (trimmedLine.ToLowerInvariant().StartsWith("mapend:"))
 					{
 						// マップ定義終わり
 						isMapMode = false;
 					}
 					else
 					{
+						// エラー処理
+						if (!line.All(c => " 0OSM#?!G".Contains(c)))
+							throw new ParserException("Invalid char", number);
 						// マップは後で纏めて解析する為、とりあえずキューに入れる
 						buf.Enqueue(line);
 					}
@@ -55,14 +68,14 @@ namespace Action
 				else
 				{
 					// BGM 指定
-					if (line.ToLowerInvariant().StartsWith("bgm:"))
+					if (trimmedLine.ToLowerInvariant().StartsWith("bgm:"))
 					{
-						BgmPath = line.Trim().Substring(4);
+						BgmPath = trimmedLine.Substring(4).Trim();
 					}
-					// モードしてい
-					if (line.ToLowerInvariant().StartsWith("mode:"))
+					// モード指定
+					if (trimmedLine.ToLowerInvariant().StartsWith("mode:"))
 					{
-						var mode = line.Trim().ToLowerInvariant().Substring(4);
+						var mode = trimmedLine.ToLowerInvariant().Substring(5).Trim();
 						switch (mode)
 						{
 							case "0":
@@ -86,7 +99,7 @@ namespace Action
 						}
 					}
 					// マップ解析を始める
-					if (line.ToLowerInvariant().StartsWith("mapstart:"))
+					if (trimmedLine.ToLowerInvariant().StartsWith("mapstart:"))
 					{
 						// マップの定義がもう終わっていればエラー
 						if (buf.Count > 0)
@@ -98,6 +111,45 @@ namespace Action
 			}
 			if (buf.Count == 0)
 				throw new ParserException("Empty map data is not allowed", number);
+			
+			Data = new Chip[buf.Max(s => s.Length), buf.Count];
+			var yMax = buf.Count;
+			for (var y = 0; y < yMax; y++)
+			{
+				var line = buf.Dequeue();
+				for (var x = 0; x < line.Length; x++)
+				{
+					Console.WriteLine(line);
+					switch (line[x])
+					{
+						case Ground:
+							Data[x, y] = Chip.Ground;
+							break;
+						case Coin:
+							Data[x, y] = Chip.Coin;
+							break;
+						case Start:
+							StartPosition = new Vector(x, y);
+							break;
+						case Enemy:
+							// TODO: Implement Enemy
+							break;
+						case Brick:
+							Data[x, y] = Chip.Brick;
+							break;
+						case BoxCoin:
+							Data[x, y] = Chip.BoxCoin;
+							break;
+						case BoxMushroom:
+							Data[x, y] = Chip.BoxMushroom;
+							break;
+						case Goal:
+							Data[x, y] = Chip.Goal;
+							GoalPositionX = x;
+							break;
+					}
+				}
+			}
 		}
 
 		const char Air = ' ';

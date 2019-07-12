@@ -8,5 +8,7 @@ namespace Action
 		Brick,
 		BoxCoin,
 		BoxMushroom,
+		BoxEmpty,
+		Goal,
 	}
 }
